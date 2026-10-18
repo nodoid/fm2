@@ -1,0 +1,23 @@
+# build output: tapes, maps, screenshots, logs
+build/
+
+# local cc65 toolchain copy
+tools/bin/
+tools/asminc/
+tools/cfg/
+tools/html/
+tools/include/
+tools/lib/
+tools/samples/
+tools/target/
+tools/cc65.zip
+.freebuff/
+
+# python
+__pycache__/
+*.pyc
+
+# editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
