@@ -13,15 +13,21 @@ It follows the Spectrum sequel rather than the 1982 original:
 * **FM2 player attributes** — name, position (G/D/M/A), skill 3–9 and
   value in thousands, plus fitness out of 100.  A player used out of
   position counts as skill 2.
-* **Twelve outfield zones** laid out over defence, midfield and attack.
-  You place ten outfield players into those zones, so a 4-4-2, 4-3-3 or
-  4-2-4 falls out of where you put them; leaving a zone empty gives the
-  opposition space, filling it marks their man.
+* **Twelve outfield zones** laid out over defence, midfield and attack,
+  picked on a HIRES pitch page the way the Spectrum game does it: the
+  pitch is drawn with the defence, midfield and attack bands, a reserve
+  pool above it and two substitute slots below.  You take a player from
+  the pool and drop him into a position; fire on a filled position lifts
+  him so two players can be swapped.  So a 4-4-2, 4-3-3 or 4-2-4 falls
+  out of where you put them; leaving a zone empty gives the opposition
+  space, filling it marks their man.
 * **Passing-height and passing-length training**, as in the original.
 * **The action**: the match is played out as a series of animated
-  sequences on a text-mode pitch, with the ball, a running scoreboard
-  and one-line commentary, and a half-time team talk where you can
-  change the side.
+  sequences over a 240x200 HIRES pitch, with the ball moving between
+  engine frames, a running scoreboard, one-line commentary and a
+  half-time team talk where you can change the side.  Every pixel goes
+  through an assembly blitter (`src/hires.s`), so a redraw costs stores
+  rather than a C loop per pixel.
 * **Two cups** — the FA Cup and the League Cup — drawn as 32-club
   knockouts during the season.
 * Sponsorship, gate receipts, wages, board confidence, the manager's
@@ -89,13 +95,18 @@ python tests/e2e_oricutron.py --selftest # the on-machine tests
 | `src/game.c` | divisions, round-robin fixtures, tables, squads, zones, cups, finances, save block |
 | `src/match.c` | the action engine: possession, passes, tackles, shots, goals, half time |
 | `src/main.c` | every screen and the game flow |
-| `src/ui.c` | line builder, page furniture, the text-mode pitch |
+| `src/ui.c` | line builder and the page furniture for the text screens |
+| `src/hires.c` | rectangles, circles and markers drawn on the bitmap |
+| `src/select.c` | the HIRES team-selection page |
+| `src/action.c` | the HIRES match-action pitch and scoreboard |
 | `src/scr.s` | 40x28 text driver (cursor, strings, attributes, inverse video) |
+| `src/hires.s` | bitmap driver: plot, line fills, 5x7 text, mode switch |
+| `src/font.s` | packed 5x7 font for the bitmap pages (generated) |
 | `src/kbd.s` | 50 Hz interrupt-driven keyboard scanner and key queue |
 | `src/snd.s` | AY-3-8912 clicks, goal jingle and whistle |
 | `src/tape.s` | cassette save/load through the Atmos ROM routines |
 | `src/sys.s` | soft reset back to BASIC |
-| `oric.cfg` | ld65 config: autostart tape header, 1K stack |
+| `oric.cfg` | ld65 config: autostart tape header, 448-byte stack, save block at `$A000` |
 
 ## Notes on the port
 
@@ -108,3 +119,10 @@ python tests/e2e_oricutron.py --selftest # the on-machine tests
   stored, which keeps the game inside 37K of RAM.
 * Football Manager 2 is a trademark of Addictive Software; this is an
   unofficial tribute port, written from scratch.
+
+## Licence
+
+The **DILLIGAF licence** (*Do I Look Like I Give A F\*\*\**): do what you
+like with it - copy, change, sell, port it - with no attribution and no
+warranty.  The full text is in [LICENSE](LICENSE).  It is not an
+OSI-approved licence, which will surprise nobody.

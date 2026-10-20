@@ -1,0 +1,38 @@
+THE DILLIGAF LICENCE
+DILLIGAF = "Do I Look Like I Give A F***"
+
+Version 1, October 2026
+Copyright (c) 2026 P F Johnson
+
+Football Manager 2 for the Oric Atmos - the source, the tapes
+(build/fm2.tap, build/selftest.tap), the tools and the documentation.
+
+Permission to use, copy, modify, merge, publish, distribute, sublicense,
+sell, port, mangle, obfuscate, print on a mug or feed to a compiler you
+do not trust is granted, free of charge, to anybody who wants it.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE AND
+NON-INFRINGEMENT, AND ANY WARRANTY THAT YOUR TAPE WILL LOAD OR THAT YOUR
+SAVE WILL SURVIVE.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE, THE USE OF THE SOFTWARE, OR THE TERRIBLE TEAM YOU PICKED.
+
+NO ATTRIBUTION IS REQUIRED.  No copyright notice has to be kept, no
+"based on" line has to be added, and nobody has to ask first - that is
+the whole point of the licence.
+
+WHERE THE LAW WILL NOT ALLOW THE ABOVE - implied warranties that cannot
+be disclaimed, moral rights, a jurisdiction that wants something more
+formal - the same answer applies: take the widest permission that
+jurisdiction permits, and accept no liability beyond the price you paid
+for the tape, which was nothing.
+
+THIRD-PARTY BITS keep their own licences and are not relicensed here:
+the cc65 toolchain under tools/bin is zlib-licensed, and the lzsa and
+zx02 headers under tools/include are Boost and MIT respectively.  They
+are build tools and vendored sources, not part of the game.
+
+Do I look like I give a f***?  No.  Now go and win the cup.
