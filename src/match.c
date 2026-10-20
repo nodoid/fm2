@@ -13,19 +13,12 @@
 #include "fm2.h"
 #include "match.h"
 
-static const char *const opp_names[] = {
-    "SMITH", "JONES", "BROWN", "TAYLOR", "WILSON", "DAVIES",
-    "EVANS", "THOMAS", "ROBERTS", "WALKER", "WRIGHT", "CLARKE"
-};
-#define NOPP (sizeof opp_names / sizeof opp_names[0])
-
 /* match state */
 static unsigned char m_home, m_away;
 static unsigned char m_minute, m_hs, m_as;
 static unsigned char m_ballx, m_bally;
 static unsigned char m_half_done, m_done;
 static unsigned char m_mid_h, m_mid_a, m_att_h, m_att_a, m_def_h, m_def_a;
-static char m_opp[4][10];
 
 /* goalscorers for the user's side */
 static unsigned char m_scorers[8];
@@ -37,10 +30,8 @@ static unsigned char user_side(unsigned char side)
 }
 
 /* queued frames for the current sequence */
-static MatchFrame mq[4];
+static MatchFrame mq[3];
 static unsigned char mq_head, mq_len;
-
-static char numbuf[6];
 
 unsigned char sim_goals(unsigned char att, unsigned char def)
 {
@@ -66,36 +57,12 @@ void quick_score(unsigned char home_str, unsigned char away_str,
 
 /* ---------------------------------------------------------------------- */
 
-static void frame_text(MatchFrame *f, const char *a, const char *b,
-                       const char *c, unsigned char num)
-{
-    char *d = f->text;
-
-    *d = 0;
-    if (a)
-        str_append(d, a);
-    if (b)
-        str_append(d, b);
-    if (num != 0xFF) {
-        str_append(d, u2s(num, numbuf));
-        str_append(d, "'");
-    }
-    if (c)
-        str_append(d, c);
-    while (*d)
-        ++d;
-    /* keep the commentary inside the 39 column message line */
-    if ((unsigned char)(d - f->text) > 33)
-        f->text[33] = 0;
-}
-
 static void push(unsigned char kind, unsigned char side, unsigned char x,
-                 unsigned char y, const char *a, const char *b, const char *c,
-                 unsigned char num)
+                 unsigned char y)
 {
     MatchFrame *f;
 
-    if (mq_len >= 4)
+    if (mq_len >= 3)
         return;
     f = &mq[mq_head + mq_len];        /* mq_head is always 0 in practice */
     f->kind = kind;
@@ -105,7 +72,6 @@ static void push(unsigned char kind, unsigned char side, unsigned char x,
     f->minute = m_minute;
     f->hs = m_hs;
     f->as = m_as;
-    frame_text(f, a, b, c, num);
     m_ballx = x;
     m_bally = y;
     ++mq_len;
@@ -144,16 +110,6 @@ static unsigned char user_player(unsigned char view)
     return 0xFF;
 }
 
-static const char *user_name(unsigned char i)
-{
-    return (i == 0xFF) ? "A PLAYER" : squad[i].name;
-}
-
-static const char *opp_name(void)
-{
-    return m_opp[rnd_range(4)];
-}
-
 /* Create the frames for one attacking move. */
 static void make_attack(void)
 {
@@ -169,36 +125,21 @@ static void make_attack(void)
 
     x = (unsigned char)(side ? 28 : 11);
     y = (unsigned char)(2 + rnd_range(4));
-
-    if (user_side(side))
-        push(M_PASS, side, x, y, "PASS BY ", user_name(user_player(VIEW_MID)), NULL, 0xFF);
-    else
-        push(M_PASS, side, x, y, "PASS BY ", opp_name(), NULL, 0xFF);
+    push(M_PASS, side, x, y);
 
     /* the move develops toward goal */
     x = (unsigned char)(side ? 20 : 19);
     y = (unsigned char)(2 + rnd_range(4));
-    if (user_side(side))
-        push(M_PASS, side, x, y, "FORWARD TO ", user_name(user_player(VIEW_MID)), NULL, 0xFF);
-    else
-        push(M_PASS, side, x, y, "FORWARD TO ", opp_name(), NULL, 0xFF);
+    push(M_PASS, side, x, y);
 
     x = (unsigned char)(side ? 14 : 25);
     y = (unsigned char)(2 + rnd_range(4));
 
     /* tackle or shot */
-    {
-        unsigned char chance = (unsigned char)(rnd_range(100));
-
-        if (chance < 35) {
-            /* the defending side wins it back */
-            if (user_side(side))
-                push(M_TACKLE, (unsigned char)!side, x, y, "TACKLED BY ", opp_name(), NULL, 0xFF);
-            else
-                push(M_TACKLE, (unsigned char)!side, x, y, "TACKLED BY ",
-                     user_name(user_player(VIEW_DEF)), NULL, 0xFF);
-            return;
-        }
+    if (rnd_range(100) < 35) {
+        /* the defending side wins it back */
+        push(M_TACKLE, (unsigned char)!side, x, y);
+        return;
     }
 
     {
@@ -209,31 +150,20 @@ static void make_attack(void)
         x = (unsigned char)(side ? (rnd_range(3) ? 6 : 9) : (rnd_range(3) ? 33 : 30));
         y = (unsigned char)(3 + rnd_range(2));
         if (rnd_range(100) < p) {
-            if (side) {
+            if (side)
                 ++m_as;
-            } else {
+            else
                 ++m_hs;
-            }
             if (mine && m_nscorers < 8 && scorer != 0xFF)
                 m_scorers[m_nscorers++] = scorer;
-            if (side)
-                push(M_GOAL, 1, 2, 4, "GOAL FOR ", m_opp[rnd_range(4)], NULL, m_minute);
-            else
-                push(M_GOAL, 0, 37, 4, "GOAL! ", user_name(scorer), NULL, m_minute);
+            push(M_GOAL, side, (unsigned char)(side ? 2 : 37), 4);
             mq[mq_len - 1].hs = m_hs;
             mq[mq_len - 1].as = m_as;
         } else if (rnd_range(3) == 0) {
-            if (mine)
-                push(M_MISS, side, x, 1, "SHOT BY ", user_name(scorer), " GOES WIDE", 0xFF);
-            else
-                push(M_MISS, side, x, 1, "SHOT BY ", opp_name(), " GOES WIDE", 0xFF);
+            push(M_MISS, side, x, 1);
         } else {
-            if (mine)
-                push(M_SAVE, (unsigned char)!side, (unsigned char)(side ? 3 : 36), 4,
-                     "SAVE FROM ", user_name(scorer), NULL, 0xFF);
-            else
-                push(M_SAVE, (unsigned char)!side, (unsigned char)(side ? 3 : 36), 4,
-                     "SAVE FROM ", opp_name(), NULL, 0xFF);
+            push(M_SAVE, (unsigned char)!side,
+                 (unsigned char)(side ? 3 : 36), 4);
         }
     }
 }
@@ -247,8 +177,6 @@ static void next_minute(void)
 
 void match_begin(unsigned char home, unsigned char away)
 {
-    unsigned char i, k;
-
     m_home = home;
     m_away = away;
     m_minute = 0;
@@ -280,12 +208,6 @@ void match_begin(unsigned char home, unsigned char away)
     }
     m_nscorers = 0;
 
-    for (k = 0; k < 4; ++k) {
-        const char *s = opp_names[rnd_range((unsigned char)NOPP)];
-        for (i = 0; i < 9 && s[i]; ++i)
-            m_opp[k][i] = s[i];
-        m_opp[k][i] = 0;
-    }
 }
 
 unsigned char match_next(MatchFrame *f)
@@ -311,7 +233,6 @@ unsigned char match_next(MatchFrame *f)
         f->minute = 0;
         f->hs = 0;
         f->as = 0;
-        strcpy(f->text, "KICK OFF");
         m_minute = 2;
         return 1;
     }
@@ -324,7 +245,6 @@ unsigned char match_next(MatchFrame *f)
         f->minute = 45;
         f->hs = m_hs;
         f->as = m_as;
-        strcpy(f->text, "HALF TIME");
         m_minute = 46;
         return 1;
     }
@@ -337,7 +257,6 @@ unsigned char match_next(MatchFrame *f)
         f->minute = 90;
         f->hs = m_hs;
         f->as = m_as;
-        strcpy(f->text, "FULL TIME");
         return 1;
     }
 

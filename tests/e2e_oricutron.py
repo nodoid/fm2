@@ -85,26 +85,38 @@ def key(o, name, pause=0.4):
     time.sleep(pause)
 
 
-def load_tape(o):
+def load_tape(o, needle="FOOTBALL MANAGER 2", shot="e2e_01_title.txt"):
     o.type("CLOAD")
     o.tap('"')
     o.tap('"')
     o.tap("ENTER")
-    return wait_for(o, "FOOTBALL MANAGER 2", timeout=90,
-                    shot="e2e_01_title.txt")
+    return wait_for(o, needle, timeout=90, shot=shot)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tape", default=os.path.join(ROOT, "build", "fm2.tap"))
+    ap.add_argument("--tape")
     ap.add_argument("--exe", default=default_exe())
     ap.add_argument("--selftest", action="store_true",
                     help="run the on-machine unit-test tape instead")
     args = ap.parse_args()
 
+    if args.tape is None:
+        name = "selftest.tap" if args.selftest else "fm2.tap"
+        args.tape = os.path.join(ROOT, "build", name)
+
     os.makedirs(SHOTS, exist_ok=True)
     o = Oricutron(args.exe, args.tape, boot_wait=5)
     try:
+        if args.selftest:
+            wait_for(o, "SELF TEST", timeout=180)
+            text = joined(wait_for(o, "FAILURES", timeout=300,
+                                   shot="e2e_selftest.txt"))
+            check("FAILURES   0" in text, "on-machine tests: no failures")
+            check("ALL SELF TESTS PASSED" in text,
+                  "on-machine tests report success")
+            return
+
         title = joined(load_tape(o))
         check("FOOTBALL MANAGER 2" in title, "title shows the game name")
         check("FOR THE ORIC ATMOS" in title, "title names the machine")
@@ -112,13 +124,6 @@ def main():
               "title credits Addictive")
         check("1  NEW GAME" in title, "title offers a new game")
 
-        if args.selftest:
-            text = joined(wait_for(o, "SELF TEST", timeout=180,
-                                   shot="e2e_selftest.txt"))
-            check("FAILURES   0" in text, "on-machine tests: no failures")
-            check("ALL SELF TESTS PASSED" in text,
-                  "on-machine tests report success")
-            return
 
         # ---- choose a club -----------------------------------------------
         key(o, "1")
@@ -128,8 +133,17 @@ def main():
               "division four clubs are listed")
         key(o, "ENTER")
 
+        # ---- kit colour and sponsor ----------------------------------------
+        text = joined(wait_for(o, "KIT COLOUR", shot="e2e_03_kit.txt"))
+        check("RED" in text and "WHITE" in text, "a kit colour is offered")
+        key(o, "1")
+        text = joined(wait_for(o, "SPONSORSHIP OFFER",
+                               shot="e2e_04_sponsor.txt"))
+        check("ACCEPT THE OFFER?" in text, "a sponsor makes an offer")
+        key(o, "Y")
+
         # ---- management screen -------------------------------------------
-        text = joined(wait_for(o, "MANAGERS OFFICE", shot="e2e_03_office.txt"))
+        text = joined(wait_for(o, "MANAGERS OFFICE", shot="e2e_05_office.txt"))
         check("TEAM DISPLAY" in text, "office lists the team display")
         check("TEAM SELECTION" in text, "office lists team selection")
         check("PLAY MATCH" in text, "office offers the next match")
@@ -144,19 +158,21 @@ def main():
               and " A " in text, "positions are G/D/M/A")
         key(o, "ESC")
 
-        # ---- team selection ------------------------------------------------
+        # ---- team selection (a HIRES pitch) --------------------------------
         key(o, "2")
-        text = joined(wait_for(o, "TEAM SELECTION", shot="e2e_05_selection.txt"))
-        check("VIEW MIDFIELD" in text, "selection opens on the midfield view")
-        check("SELECTED 11 OF 11" in text, "eleven players are placed")
-        check("TEAM READY" in text, "the auto selected team is valid")
-        check("SQUAD" in text and "SUBS" in text,
-              "selection shows the squad and substitutes")
+        time.sleep(4.0)
+        # In HIRES there is no text screen for F11 to copy, so the check is
+        # that the office has gone and the bitmap page is up.
+        check("MANAGERS OFFICE" not in joined(o.snapshot()),
+              "team selection takes over the screen")
+        o.screenshot(os.path.join(SHOTS, "e2e_05_selection.png"))
         key(o, "P")
-        text = joined(settle(o))
-        check("VIEW ATTACK" in text, "the view can be changed")
+        time.sleep(2.0)
         key(o, "I")
+        time.sleep(2.0)
         key(o, "ESC")
+        text = joined(wait_for(o, "MANAGERS OFFICE", timeout=40))
+        check("TEAM READY" in text, "team selection keeps the side valid")
 
         # ---- training ------------------------------------------------------
         key(o, "3")
@@ -185,36 +201,32 @@ def main():
         check("BOARD CONFIDENCE" in text, "finance shows the board")
         key(o, "ESC")
 
-        # ---- the match -----------------------------------------------------
+        # ---- the match (HIRES action screen) -------------------------------
         key(o, "6")
-        text = joined(wait_for(o, "KICK OFF", timeout=90,
-                               shot="e2e_09_action.txt"))
-        check("KICK OFF" in text, "the match kicks off")
-        check("ALDERSHOT" in text, "the scoreboard shows the clubs")
+        time.sleep(3.0)
+        o.screenshot(os.path.join(SHOTS, "e2e_09_action.png"))
 
         saw_half = False
-        saw_full = False
-        for _ in range(80):
+        office_seen = 0
+        for _ in range(200):
             screen = joined(o.snapshot())
-            if "HALF TIME - PRESS ENTER" in screen:
-                key(o, "ENTER")
-                continue
             if "HALF TIME TEAM TALK" in screen:
                 saw_half = True
                 o.snapshot(os.path.join(SHOTS, "e2e_10_halftime.txt"))
                 key(o, "2")
+                time.sleep(2.0)
+                office_seen = 0
                 continue
-            if "FULL TIME" in screen:
-                saw_full = True
-                o.snapshot(os.path.join(SHOTS, "e2e_11_fulltime.txt"))
-                break
-            for _ in range(2):
-                o.tap("SPACE", hold=0.05, gap=0.25)
-        check(saw_full, "the match reaches full time")
+            if "MANAGERS OFFICE" in screen:
+                office_seen += 1
+                if office_seen >= 2:
+                    break
+            else:
+                office_seen = 0
+            o.tap("SPACE", hold=0.05, gap=0.12)
         check(saw_half, "half time is offered")
 
-        key(o, "ENTER")
-        text = joined(wait_for(o, "MANAGERS OFFICE", timeout=60,
+        text = joined(wait_for(o, "MANAGERS OFFICE", timeout=90,
                                shot="e2e_12_after.txt"))
         check(" WK 2" in text, "the week advances after the match")
         check("WIN" in text or "LOSS" in text or "DRAW" in text,

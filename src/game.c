@@ -43,6 +43,11 @@ static const char *const club_names[NUM_TEAMS] = {
     "TRANMERE",    "WREXHAM",     "CARLISLE",      "DARLINGTON"
 };
 
+const char *team_name(unsigned char i)
+{
+    return club_names[league[i].name_id];
+}
+
 static const char *const surnames[] = {
     "SMITH", "JONES", "BROWN", "TAYLOR", "WILSON", "DAVIES",
     "EVANS", "THOMAS", "ROBERTS", "WALKER", "WRIGHT", "ROBINSON",
@@ -90,12 +95,24 @@ unsigned char res_hs[MPR], res_as[MPR];
 unsigned char res_valid[MPR];
 
 Target market[MARKET_SIZE];
-char news[64];
+char news[48];
+char sponsor[12];
+unsigned char shirt = 1;
 
 Cup fa_cup, league_cup;
 unsigned char cup_won;
 
+/* On the Oric the save copy lives at $A000, the start of the HIRES area:
+ * it is only touched on the save/load page, which is text mode, and the
+ * pitch screens clear the bitmap when they open.  That keeps 2K of BSS
+ * free for the drawing code.  The host test target has no such area. */
+#ifdef __ATMOS__
+#pragma bss-name(push, "BSSHIRES")
+#endif
 SaveGame saveblk;
+#ifdef __ATMOS__
+#pragma bss-name(pop)
+#endif
 
 unsigned int rng_state;
 
@@ -196,9 +213,7 @@ void league_reset(void)
 
     for (i = 0; i < NUM_TEAMS; ++i) {
         league[i].played = 0;
-        league[i].won = 0;
         league[i].drawn = 0;
-        league[i].lost = 0;
         league[i].gf = 0;
         league[i].ga = 0;
         league[i].points = 0;
@@ -222,7 +237,7 @@ void league_setup(void)
     for (i = 0; i < NUM_TEAMS; ++i) {
         unsigned char div = (unsigned char)(i / TEAMS_PER_DIV);
 
-        strcpy(league[i].name, club_names[i]);
+        league[i].name_id = i;
         /* a spread of strength inside each division */
         league[i].str = (unsigned char)(92 - div * 13 - (i % 8) + 4);
     }
@@ -264,6 +279,7 @@ void new_game(unsigned char team)
     season = 1;
     board_confidence = 60;
     cup_won = 0;
+    sponsor[0] = 0;
     keeper = 0xFF;
     for (i = 0; i < ZONES; ++i)
         zone[i] = 0xFF;
@@ -345,12 +361,8 @@ void apply_result(unsigned char home, unsigned char away,
     a->gf = (unsigned char)(a->gf + as);
     a->ga = (unsigned char)(a->ga + hs);
     if (hs > as) {
-        ++h->won;
-        ++a->lost;
         h->points += 3;
     } else if (hs < as) {
-        ++a->won;
-        ++h->lost;
         a->points += 3;
     } else {
         ++h->drawn;
@@ -442,7 +454,7 @@ static signed char better(unsigned char x, unsigned char y)
         return (signed char)(gda > gdb);
     if (a->gf != b->gf)
         return (signed char)(a->gf > b->gf);
-    return (signed char)(strcmp(a->name, b->name) < 0);
+    return (signed char)(a->name_id < b->name_id);
 }
 
 void sort_table(unsigned char div, unsigned char *order)
@@ -1018,10 +1030,9 @@ static void swap_clubs(unsigned char a, unsigned char b)
 void promote_relegate(void)
 {
     unsigned char d;
-    char myname[13];
+    unsigned char mine = league[user_team].name_id;
     unsigned char i;
 
-    strcpy(myname, league[user_team].name);
     for (d = 0; d + 1 < DIVS; ++d) {
         unsigned char up_order[TEAMS_PER_DIV];
         unsigned char down_order[TEAMS_PER_DIV];
@@ -1036,7 +1047,7 @@ void promote_relegate(void)
         }
     }
     for (i = 0; i < NUM_TEAMS; ++i)
-        if (strcmp(league[i].name, myname) == 0) {
+        if (league[i].name_id == mine) {
             user_team = i;
             break;
         }

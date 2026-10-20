@@ -35,8 +35,7 @@ static void say(const char *s)
 #ifdef ORIC_TEST
     if (row_y > 26)
         row_y = 3;
-    ui_gotoxy(0, row_y);
-    ui_fill(row_y, ' ');
+    ui_hline(row_y, ' ');
     ui_gotoxy(0, row_y);
     ui_puts(s);
     ++row_y;
@@ -135,8 +134,8 @@ static void test_setup(void)
     rng_seed(4242);
     league_setup();
     for (i = 0; i < NUM_TEAMS; ++i) {
-        ok(league[i].name[0] != 0, "club has a name");
-        ok(strlen(league[i].name) <= 12, "club name fits column");
+        ok(team_name(i)[0] != 0, "club has a name");
+        ok(strlen(team_name(i)) <= 12, "club name fits column");
     }
 
     new_game(60);                      /* a Division 4 club */
@@ -265,7 +264,7 @@ static void test_results_and_table(void)
     check_eq(league[base + 2].ga, 3, "goals against recorded");
     apply_result((unsigned char)(base + 3), (unsigned char)(base + 4), 1, 1);
     check_eq(league[base + 3].points, 1, "draw is one point");
-    check_eq(league[base + 3].played, 1, "played counted");
+    check_eq(league[base + 3].drawn, 1, "draw counted");
 
     sort_table(3, order);
     ok(order[0] == base + 1 || league[order[0]].points >= league[order[1]].points,
@@ -293,7 +292,6 @@ static void test_action(void)
         ++frames;
         ok(f.x < 40, "ball x on the pitch");
         ok(f.y < 8, "ball y on the pitch");
-        ok(strlen(f.text) <= FRAME_LEN, "commentary fits the line");
         if (f.kind == M_HALF)
             saw_half = 1;
         if (f.kind == M_FULL)
@@ -454,13 +452,12 @@ static void test_season(void)
 
     /* promotion and relegation keep the club count and the user's club */
     {
-        char myname[13];
+        unsigned char mine = league[user_team].name_id;
         unsigned char s = season;
 
-        strcpy(myname, league[user_team].name);
         promote_relegate();
-        ok(strcmp(league[user_team].name, myname) == 0,
-           "the user follows their club");
+        check_eq(league[user_team].name_id, mine,
+                 "the user follows their club");
         check_eq(league[69].played, ROUNDS, "clubs keep their records");
         new_season();
         check_eq(season, (unsigned char)(s + 1), "season counter advances");
@@ -468,6 +465,67 @@ static void test_season(void)
         check_eq(league[0].played, 0, "new season clears the table");
         ok(selection_ok(), "new season re-selects the team");
     }
+}
+
+/* A new game starts in the Fourth Division, and from there the table does
+ * the work: the top three go up, the bottom three come down, and the
+ * manager's club moves with them. */
+static void test_promotion(void)
+{
+    unsigned char order[TEAMS_PER_DIV];
+    unsigned char up[3], down[3];
+    unsigned char k, i, r, mine;
+
+    rng_seed(909);
+    new_game(68);                     /* a Fourth Division club */
+    check_eq(user_team / TEAMS_PER_DIV, 3, "a new game starts in division four");
+    for (r = 0; r < ROUNDS; ++r) {
+        unsigned char h, a;
+
+        if (find_user_fixture(r, &h, &a)) {
+            /* the manager wins every match, home or away */
+            if (h == user_team)
+                apply_result(h, a, 3, 0);
+            else
+                apply_result(h, a, 0, 3);
+            play_other_matches(r, 1);
+        }
+    }
+    check_eq(user_position(), 1, "the manager's side can win the division");
+
+    sort_table(2, order);             /* the Third Division, before */
+    for (k = 0; k < 3; ++k)
+        down[k] = league[order[TEAMS_PER_DIV - 1 - k]].name_id;
+    sort_table(3, order);             /* the Fourth Division, before */
+    for (k = 0; k < 3; ++k)
+        up[k] = league[order[k]].name_id;
+
+    mine = league[user_team].name_id;
+    promote_relegate();
+
+    check_eq(user_team / TEAMS_PER_DIV, 2, "the champions go up one division");
+    check_eq(league[user_team].name_id, mine, "the manager keeps the club");
+
+    for (k = 0; k < 3; ++k) {
+        unsigned char d = 0xFF;
+
+        for (i = 0; i < NUM_TEAMS; ++i)
+            if (league[i].name_id == up[k])
+                d = (unsigned char)(i / TEAMS_PER_DIV);
+        check_eq(d, 2, "each of the top three of division four goes up");
+    }
+    for (k = 0; k < 3; ++k) {
+        unsigned char d = 0xFF;
+
+        for (i = 0; i < NUM_TEAMS; ++i)
+            if (league[i].name_id == down[k])
+                d = (unsigned char)(i / TEAMS_PER_DIV);
+        check_eq(d, 3, "each of the bottom three of division three goes down");
+    }
+
+    new_season();
+    check_eq(user_team / TEAMS_PER_DIV, 2,
+             "the new season starts in the division won");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -486,6 +544,7 @@ static void run_all(void)
     test_transfers();
     test_save_state();
     test_season();
+    test_promotion();
 }
 
 #ifdef ORIC_TEST

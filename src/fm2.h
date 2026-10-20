@@ -57,9 +57,10 @@ typedef struct {
 } Player;
 
 typedef struct {
-    char name[13];
+    unsigned char name_id;  /* index into the club name table            */
     unsigned char str;      /* AI strength, 38..90                      */
-    unsigned char played, won, drawn, lost;
+    unsigned char played;
+    unsigned char drawn;    /* wins come from points and draws          */
     unsigned char gf, ga;
     unsigned int points;
 } Team;
@@ -102,7 +103,9 @@ extern unsigned char res_hs[MPR], res_as[MPR];
 extern unsigned char res_valid[MPR];
 
 extern Target market[MARKET_SIZE];
-extern char news[64];
+extern char news[48];
+extern char sponsor[12];                  /* shirt sponsor, empty if none */
+extern unsigned char shirt;               /* user's kit colour, 1..7      */
 
 extern unsigned int rng_state;
 
@@ -128,7 +131,7 @@ typedef struct {
 } SaveGame;
 
 #define SAVE_MAGIC   0x464D          /* "FM" */
-#define SAVE_VERSION 3
+#define SAVE_VERSION 4
 
 extern SaveGame saveblk;
 void save_game_state(void);
@@ -201,5 +204,6 @@ char *u2s(unsigned int v, char *buf);
 void str_append(char *dst, const char *src);
 void make_player_name(char *dst, unsigned char pos, unsigned char n);
 char *news_line(const char *msg);
+const char *team_name(unsigned char i);
 
 #endif

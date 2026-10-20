@@ -4,12 +4,15 @@
  * The interface follows the Spectrum original: one management screen
  * with numbered options, a twelve-zone team selection across defence,
  * midfield and attack, passing-height/length training, and a match
- * played out as animated action sequences on a text-mode pitch.
+ * played out as animated action sequences on a HIRES pitch.
  */
 #include <string.h>
 #include "fm2.h"
 #include "match.h"
 #include "ui.h"
+#include "hires.h"
+#include "select.h"
+#include "action.h"
 
 static char b[8];
 
@@ -39,11 +42,6 @@ unsigned char tape_load_game(void)
 /* ---------------------------------------------------------------------- */
 /* small helpers                                                           */
 /* ---------------------------------------------------------------------- */
-
-static const char *view_name(unsigned char v)
-{
-    return v == VIEW_DEF ? "DEFENCE" : (v == VIEW_MID ? "MIDFIELD" : "ATTACK");
-}
 
 static const char *pos_name(unsigned char p)
 {
@@ -97,8 +95,6 @@ static unsigned char title_screen(unsigned int *seed)
         ui_clear();
         ui_bar_center(2, "FOOTBALL MANAGER 2", ATTR_BAR);
         ui_bar_center(3, "FOR THE ORIC ATMOS", ATTR_YEL);
-        ui_center(6, "MANAGER: YOU");
-        ui_center(7, "FOUR DIVISIONS - ONE SEASON");
         ui_center(10, "1  NEW GAME");
         ui_center(11, "2  LOAD GAME");
         ui_center(12, "3  INSTRUCTIONS");
@@ -128,44 +124,18 @@ static unsigned char title_screen(unsigned int *seed)
 
 static void instructions_screen(void)
 {
-    unsigned char page = 0, k;
-
-    for (;;) {
-        ui_clear();
-        ui_bar_center(0, page ? "INSTRUCTIONS 2/2" : "INSTRUCTIONS 1/2",
-                      ATTR_BAR);
-        if (!page) {
-            ui_center(2, "HOW TO PLAY");
-            ui_gotoxy(1, 4);  ui_puts("YOU ARE THE MANAGER OF A DIVISION 4");
-            ui_gotoxy(1, 5);  ui_puts("CLUB.  WIN THE LEAGUE AND THE CUPS.");
-            ui_gotoxy(1, 7);  ui_puts("1 TEAM DISPLAY   SQUAD AND SKILL");
-            ui_gotoxy(1, 8);  ui_puts("2 TEAM SELECTION TWELVE ZONES");
-            ui_gotoxy(1, 9);  ui_puts("3 TRAINING       PASSING STYLE");
-            ui_gotoxy(1, 10); ui_puts("4 BUY PLAYER     5 SELL PLAYER");
-            ui_gotoxy(1, 11); ui_puts("6 PLAY MATCH     THE ACTION");
-            ui_gotoxy(1, 12); ui_puts("7 LEAGUE TABLE   8 RESULTS");
-            ui_gotoxy(1, 13); ui_puts("9 FINANCE        0 SAVE / LOAD");
-            ui_gotoxy(1, 15); ui_puts("R MANAGEMENT RECORD");
-        } else {
-            ui_center(2, "THE TEAM");
-            ui_gotoxy(1, 4);  ui_puts("SKILL IS 3 TO 9.  A PLAYER USED");
-            ui_gotoxy(1, 5);  ui_puts("OUT OF POSITION IS TREATED AS 2.");
-            ui_gotoxy(1, 7);  ui_puts("FITNESS FALLS IN MATCHES.  BELOW");
-            ui_gotoxy(1, 8);  ui_puts("50 HE CANNOT PLAY; REST HIM.");
-            ui_gotoxy(1, 10); ui_puts("TWELVE OUTFIELD ZONES: FOUR IN");
-            ui_gotoxy(1, 11); ui_puts("DEFENCE, MIDFIELD AND ATTACK.");
-            ui_gotoxy(1, 12); ui_puts("TWO ZONES STAY EMPTY; MARK AN");
-            ui_gotoxy(1, 13); ui_puts("OPPONENT BY FILLING HIS ZONE.");
-            ui_gotoxy(1, 15); ui_puts("TRAINING SETS PASSING HEIGHT");
-            ui_gotoxy(1, 16); ui_puts("AND LENGTH.  HIGH AND LONG IS");
-            ui_gotoxy(1, 17); ui_puts("KICK AND RUSH; SHORT SUITS SKILL.");
-        }
-        ui_footer("LEFT/RIGHT PAGE   ESC BACK");
-        k = ui_key();
-        if (k == K_ESC)
-            return;
-        page = (unsigned char)(!page);
-    }
+    ui_clear();
+    ui_bar_center(0, "INSTRUCTIONS", ATTR_BAR);
+    ui_gotoxy(1, 2);  ui_puts("MANAGE ONE CLUB FOR A SEASON.");
+    ui_gotoxy(1, 4);  ui_puts("1 SQUAD  2 TEAM  3 TRAINING");
+    ui_gotoxy(1, 5);  ui_puts("4 BUY  5 SELL  6 MATCH  7 TABLE");
+    ui_gotoxy(1, 6);  ui_puts("8 RESULTS  9 FINANCE  0 SAVE");
+    ui_gotoxy(1, 8);  ui_puts("SKILL 3-9. OUT OF POSITION IS 2.");
+    ui_gotoxy(1, 9);  ui_puts("FITNESS BELOW 50 AND HE IS OUT.");
+    ui_gotoxy(1, 11); ui_puts("TWELVE ZONES: FILL ONE TO MARK.");
+    ui_footer("ESC BACK");
+    while (ui_key() != K_ESC)
+        ;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -174,25 +144,40 @@ static void instructions_screen(void)
 
 static unsigned char club_select(void)
 {
-    unsigned char cur = 0, k, i;
-    unsigned char base = (unsigned char)((DIVS - 1) * TEAMS_PER_DIV);
+    unsigned char div = (unsigned char)(DIVS - 1), cur = 0, k, i;
 
     for (;;) {
+        unsigned char base = (unsigned char)(div * TEAMS_PER_DIV);
+
         ui_clear();
-        ui_bar_center(0, "CHOOSE YOUR CLUB - DIVISION 4", ATTR_BAR);
+        lb_reset();
+        lb_str("CHOOSE YOUR CLUB - DIVISION ");
+        lb_num((unsigned int)(div + 1), 1, ' ');
+        lb_pad(39);
+        ui_attr(0, ATTR_BAR);
+        lb_draw(0, 0);
         for (i = 0; i < TEAMS_PER_DIV; ++i) {
             lb_reset();
             lb_ch(' ');
             lb_num((unsigned int)(i + 1), 2, ' ');
             lb_str("  ");
-            lb_str(league[base + i].name);
+            lb_str(team_name((unsigned char)(base + i)));
             ui_item_lb((unsigned char)(2 + i), (unsigned char)(i == cur));
         }
         ui_pause(150);
-        ui_help("WHICH CLUB WILL YOU MANAGE?");
-        ui_footer("Q/S MOVE   ENTER PICK   ESC BACK");
+        ui_help("LEFT/RIGHT CHANGES DIVISION");
+        ui_footer("1-4 DIV   Q/S MOVE   ENTER   ESC");
         k = ui_key();
-        {
+        if (k >= '1' && k < (char)('1' + DIVS)) {
+            div = (unsigned char)(k - '1');
+            cur = 0;
+        } else if (k == K_LEFT || k == K_RIGHT) {
+            if (k == K_LEFT)
+                div = (unsigned char)(div ? div - 1 : DIVS - 1);
+            else
+                div = (unsigned char)((div + 1) % DIVS);
+            cur = 0;
+        } else {
             unsigned char up;
             is_up_or(k, &up);
             if (up && cur)
@@ -203,6 +188,85 @@ static unsigned char club_select(void)
                 return (unsigned char)(base + cur);
             else if (k == K_ESC)
                 return 0xFF;
+        }
+    }
+}
+
+/* ---------------------------------------------------------------------- */
+/* kit colour                                                              */
+/* ---------------------------------------------------------------------- */
+
+/* The match screen colours the user's players with an ink attribute, so
+ * the choice is one of the seven inks that show up on green. */
+static const unsigned char kit_cols[] = { 1, 3, 4, 5, 6, 7 };
+
+static void kit_select(void)
+{
+    unsigned char k;
+
+    ui_clear();
+    ui_bar_center(2, "KIT COLOUR", ATTR_BAR);
+    ui_center(5, "1 RED   2 YELLOW   3 BLUE");
+    ui_center(6, "4 MAGENTA  5 CYAN  6 WHITE");
+    ui_footer("PRESS 1-6");
+    do {
+        k = ui_key();
+    } while (k < '1' || k > '6');
+    shirt = kit_cols[(unsigned char)(k - '1')];
+}
+
+/* ---------------------------------------------------------------------- */
+/* sponsorship - offered at the start of every season                      */
+/* ---------------------------------------------------------------------- */
+
+static const char *const sponsor_names[] = {
+    "PRISM", "ENDURANCE", "CORP", "OZONE",
+    "MANTRA", "TANGERINE", "LEISURE", "KICK OFF"
+};
+#define NSPONSORS 8
+
+void sponsor_offer(void)
+{
+    unsigned char again = 1;
+
+    while (again) {
+        unsigned char div = (unsigned char)(user_team / TEAMS_PER_DIV);
+        unsigned int amount = (unsigned int)(DIVS - div) * 50;
+        const char *name = sponsor_names[rnd8() % NSPONSORS];
+        unsigned char k;
+
+        again = 0;
+        amount = (unsigned int)(amount - rnd_range(20));
+        frame();
+        ui_bar_center(2, "SPONSORSHIP OFFER", ATTR_BAR);
+        ui_center(5, name);
+        lb_reset();
+        lb_str("WILL PAY ");
+        lb_num(amount, 3, ' ');
+        lb_str("K FOR THE SEASON");
+        lb_draw(3, 7);
+        ui_center(11, "ACCEPT THE OFFER?");
+        ui_footer("Y SIGN   N ASK FOR MORE");
+
+        do {
+            k = ui_key();
+        } while (k != 'Y' && k != 'N');
+
+        if (k == 'Y') {
+            cash += amount;
+            strcpy(sponsor, name);
+            strcpy(news, "SPONSOR SIGNS FOR THE SEASON");
+            snd_click();
+            return;
+        }
+        /* Turning a deal down only works while the board still rates you:
+         * a manager rating of 100 gives a 75% chance of another offer. */
+        if (board_confidence > 25 &&
+            rnd_range(100) < (unsigned char)(25 + board_confidence / 2)) {
+            again = 1;
+        } else {
+            sponsor[0] = 0;
+            strcpy(news, "NO SPONSOR THIS SEASON");
         }
     }
 }
@@ -246,159 +310,6 @@ static void squad_screen(void)
 /* team selection - twelve zones                                           */
 /* ---------------------------------------------------------------------- */
 
-static void slot_line(unsigned char y, const char *label, unsigned char idx,
-                      unsigned char selected)
-{
-    lb_reset();
-    lb_str(label);
-    lb_str(" [");
-    if (idx != 0xFF && idx < squad_count) {
-        lb_str(squad[idx].name);
-        lb_pad(22);
-        lb_str(pos_name(squad[idx].pos));
-        lb_num(squad[idx].skill, 2, ' ');
-    } else {
-        lb_str("EMPTY");
-        lb_pad(22);
-        lb_str("  ");
-    }
-    lb_str(" ]");
-    ui_item_lb(y, selected);
-}
-
-static void selection_screen(void)
-{
-    unsigned char view = VIEW_MID, k, i;
-    unsigned char active = 0;                 /* 0..5: gk, 4 zones, subs */
-
-    for (;;) {
-        unsigned char z;
-
-        frame();
-        ui_center(2, "TEAM SELECTION");
-        lb_reset();
-        lb_str("VIEW ");
-        lb_str(view_name(view));
-        lb_draw(0, 3);
-
-        slot_line(4, "GK ", keeper, (unsigned char)(active == 0));
-        for (i = 0; i < 4; ++i) {
-            char lab[4];
-            lab[0] = (char)('1' + i);
-            lab[1] = ' ';
-            lab[2] = ' ';
-            lab[3] = 0;
-            slot_line((unsigned char)(5 + i), lab, zone[view * 4 + i],
-                      (unsigned char)(active == 1 + i));
-        }
-        lb_reset();
-        lb_str("SUBS ");
-        for (i = 0; i < NSUBS; ++i) {
-            unsigned char s = subsel[i];
-            unsigned char base = (unsigned char)(5 + i * 17);
-
-            lb_ch('[');
-            if (s != 0xFF && s < squad_count) {
-                lb_str(squad[s].name);
-                lb_pad((unsigned char)(base + 15));
-            } else {
-                lb_str("EMPTY");
-                lb_pad((unsigned char)(base + 15));
-            }
-            lb_ch(']');
-        }
-        ui_item_lb(11, (unsigned char)(active == 5));
-
-        {
-            unsigned char row = 13;
-
-            lb_reset();
-            lb_str("SQUAD");
-            for (i = 0; i < squad_count; ++i) {
-                if (i && (i % 4) == 0) {
-                    lb_draw(0, row);
-                    ++row;
-                    lb_reset();
-                }
-                lb_ch(' ');
-                lb_ch((char)('A' + i));
-                lb_ch(' ');
-                lb_str(pos_name(squad[i].pos));
-                lb_num(squad[i].skill, 1, ' ');
-            }
-            lb_draw(0, row);
-        }
-
-        lb_reset();
-        lb_str("SELECTED ");
-        lb_num(num_selected(), 2, ' ');
-        lb_str(" OF 11  ");
-        lb_str(selection_ok() ? "TEAM READY" : "NOT VALID");
-        lb_draw(0, 18);
-
-        ui_help("A-P PICK   SPACE CLEAR   A AUTO");
-        ui_footer("Q/S SLOT  I/P VIEW  ENTER  ESC");
-
-        k = ui_key();
-        {
-            unsigned char up;
-            is_up_or(k, &up);
-            if (up) {
-                active = (unsigned char)(active ? active - 1 : 5);
-            } else if (k == 'S') {
-                active = (unsigned char)(active == 5 ? 0 : active + 1);
-            } else if (k == 'I') {
-                view = (unsigned char)(view ? view - 1 : 2);
-            } else if (k == 'P') {
-                view = (unsigned char)((view + 1) % 3);
-            } else if (k == ' ') {
-                if (active == 0)
-                    keeper = 0xFF;
-                else if (active <= 4)
-                    zone[view * 4 + active - 1] = 0xFF;
-                else
-                    subsel[active - 5] = 0xFF;
-                auto_select_marks();
-            } else if (k >= 'A' && k < (unsigned char)('A' + squad_count)) {
-                unsigned char p = (unsigned char)(k - 'A');
-
-                if (active == 0 && squad[p].pos == POS_GK) {
-                    keeper = p;
-                } else if (active <= 4) {
-                    unsigned char zz = (unsigned char)(view * 4 + active - 1);
-                    if (squad[p].pos == POS_GK) {
-                        snd_bad();
-                    } else {
-                        unsigned char j;
-                        for (j = 0; j < ZONES; ++j)
-                            if (zone[j] == p)
-                                zone[j] = 0xFF;
-                        for (j = 0; j < NSUBS; ++j)
-                            if (subsel[j] == p)
-                                subsel[j] = 0xFF;
-                        if (keeper == p)
-                            keeper = 0xFF;
-                        zone[zz] = p;
-                    }
-                } else {
-                    if (keeper != p && squad[p].pos != POS_GK) {
-                        subsel[active - 5] = p;
-                    }
-                }
-                auto_select_marks();
-            } else if (k == 'A') {
-                auto_select();
-            } else if (k == K_ENTER) {
-                if (selection_ok())
-                    return;
-                snd_bad();
-            } else if (k == K_ESC) {
-                return;
-            }
-        }
-        (void)z;
-    }
-}
 
 /* ---------------------------------------------------------------------- */
 /* training: passing height and length                                     */
@@ -556,10 +467,10 @@ static void match_screen(unsigned char home, unsigned char away,
 {
     MatchFrame f;
     unsigned char running = 1;
-    unsigned char hs, as;
+    unsigned char flip = (unsigned char)(away == user_team);
 
-    ui_clear();
-    ui_pitch_frame();
+    hires_on();
+    action_begin(home, away, flip);
     match_begin(home, away);
 
     while (running) {
@@ -568,13 +479,10 @@ static void match_screen(unsigned char home, unsigned char away,
             break;
         }
         if (f.kind == M_HALF) {
-            ui_pitch_score(league[home].name, league[away].name,
-                           f.hs, f.as, 45, cup);
-            ui_message("HALF TIME - PRESS ENTER");
-            ui_flush();
-            while (ui_key() != K_ENTER)
-                ;
-            /* half-time team talk: a quick chance to change the side */
+            action_frame(f.x, f.y, f.minute, f.hs, f.as, cup);
+            ui_pause(20000);
+            ui_pause(20000);
+            action_end();               /* text mode for the team talk */
             ui_clear();
             ui_bar_center(0, "HALF TIME TEAM TALK", ATTR_BAR);
             ui_center(2, "CHANGE THE TEAM NOW?");
@@ -589,43 +497,43 @@ static void match_screen(unsigned char home, unsigned char away,
                     c = ui_key();
                 } while (c != '1' && c != '2');
                 if (c == '1')
-                    selection_screen();
+                    team_selection();
             }
-            ui_clear();
-            ui_pitch_frame();
+            hires_on();
+            action_begin(home, away, flip);
             continue;
         }
         if (f.kind == M_FULL) {
-            hs = f.hs;
-            as = f.as;
-            ui_pitch_score(league[home].name, league[away].name, hs, as,
-                           90, cup);
-            ui_message("FULL TIME - PRESS ENTER");
-            ui_flush();
-            while (ui_key() != K_ENTER)
-                ;
+            unsigned int n;
+
+            action_frame(f.x, f.y, f.minute, f.hs, f.as, cup);
+            /* Hold the final score until a key, but not forever if the
+             * player has walked away. */
+            for (n = 0; n < 60; ++n) {
+                if (ui_key())
+                    break;
+                ui_pause(20000);
+            }
             break;
         }
 
-        ui_pitch_draw(f.x, f.y);
-        ui_pitch_score(league[home].name, league[away].name, f.hs, f.as,
-                       f.minute, cup);
-        ui_message(f.text);
+        action_frame(f.x, f.y, f.minute, f.hs, f.as, cup);
         if (f.kind == M_GOAL)
             snd_goal();
         else if (f.kind == M_TACKLE || f.kind == M_SAVE)
             snd_click();
 
-        /* animate: a short pause, or skip on a key press */
+        /* a short pause, or skip on a key press */
         {
             unsigned char i;
-            for (i = 0; i < 8; ++i) {
+            for (i = 0; i < 3; ++i) {
                 if (kbd_get())
                     break;
                 ui_pause(4000);
             }
         }
     }
+    action_end();
     ui_clear();
 }
 
@@ -652,16 +560,18 @@ static void table_screen(void)
         sort_table(div, order);
         for (i = 0; i < TEAMS_PER_DIV; ++i) {
             Team *t = &league[order[i]];
+            unsigned char won = (unsigned char)((t->points - t->drawn) / 3);
+            unsigned char lost = (unsigned char)(t->played - won - t->drawn);
 
             lb_reset();
             lb_num((unsigned int)(i + 1), 2, ' ');
             lb_ch(' ');
-            lb_str(t->name);
+            lb_str(team_name(order[i]));
             lb_pad(19);
             lb_num(t->played, 2, ' ');
-            lb_num(t->won, 3, ' ');
+            lb_num(won, 3, ' ');
             lb_num(t->drawn, 3, ' ');
-            lb_num(t->lost, 3, ' ');
+            lb_num(lost, 3, ' ');
             lb_num(t->gf, 3, ' ');
             lb_num(t->ga, 3, ' ');
             lb_num(t->points, 3, ' ');
@@ -702,18 +612,18 @@ static void results_screen(void)
             fixtures_for(div_of(user_team), round_num, fh, fa);
             lb_reset();
             if (res_valid[i]) {
-                lb_str(league[res_h[i]].name);
+                lb_str(team_name(res_h[i]));
                 lb_pad(14);
                 lb_num(res_hs[i], 1, ' ');
                 lb_ch('-');
                 lb_num(res_as[i], 1, ' ');
                 lb_ch(' ');
-                lb_str(league[res_a[i]].name);
+                lb_str(team_name(res_a[i]));
             } else {
-                lb_str(league[fh[i]].name);
+                lb_str(team_name(fh[i]));
                 lb_pad(14);
                 lb_str("V ");
-                lb_str(league[fa[i]].name);
+                lb_str(team_name(fa[i]));
             }
             lb_draw(0, (unsigned char)(4 + i));
         }
@@ -866,6 +776,7 @@ static void season_over(void)
         ;
     promote_relegate();
     new_season();
+    sponsor_offer();
 }
 
 static void match_day(void)
@@ -1008,7 +919,7 @@ static void main_loop(unsigned char *cur)
                 unsigned char h, a;
                 if (round_num < ROUNDS && find_user_fixture(round_num, &h, &a)) {
                     strcpy(extra, h == user_team ? "V " : "AT ");
-                    str_append(extra, league[h == user_team ? a : h].name);
+                    str_append(extra, team_name(h == user_team ? a : h));
                 } else {
                     strcpy(extra, "SEASON OVER");
                 }
@@ -1039,9 +950,9 @@ static void main_loop(unsigned char *cur)
         {
             unsigned char h, a;
             if (round_num < ROUNDS && find_user_fixture(round_num, &h, &a)) {
-                lb_str(league[h].name);
+                lb_str(team_name(h));
                 lb_str(" V ");
-                lb_str(league[a].name);
+                lb_str(team_name(a));
             } else {
                 lb_str("SEASON COMPLETE");
             }
@@ -1057,7 +968,7 @@ static void main_loop(unsigned char *cur)
         lb_draw(0, 18);
 
         ui_message(news);
-        ui_help("ARROWS OR NUMBER   ENTER   ESC TITLE");
+        ui_help("ARROWS OR NUMBER  ENTER  ESC");
         ui_footer("R RECORD   0 SAVE");
 
         k = ui_key();
@@ -1075,7 +986,7 @@ static void main_loop(unsigned char *cur)
                     *cur = (unsigned char)(k == '0' ? 9 : k - '1');
                 switch (*cur) {
                 case 0: squad_screen(); break;
-                case 1: selection_screen(); break;
+                case 1: team_selection(); break;
                 case 2: training_screen(); break;
                 case 3: buy_screen(); break;
                 case 4: sell_screen(); break;
@@ -1104,6 +1015,7 @@ void main(void)
     kbd_init();
     snd_init();
     scr_init();
+    scr_charset();              /* our font, so text survives the bitmap */
     ui_clear();
     league_setup();
 
@@ -1136,6 +1048,8 @@ void main(void)
                 continue;
             rng_seed((unsigned int)(seed + (unsigned int)t * 777));
             new_game(t);
+            kit_select();
+            sponsor_offer();
             cur = 0;
             main_loop(&cur);
         }

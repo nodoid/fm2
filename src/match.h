@@ -20,15 +20,12 @@
 #define M_HALF    7
 #define M_FULL    8
 
-#define FRAME_LEN 33
-
 typedef struct {
     unsigned char kind;
     unsigned char side;      /* 0 home, 1 away, 2 neutral            */
     unsigned char x, y;      /* ball position, x 0..39, y 0..7       */
     unsigned char minute;
     unsigned char hs, as;
-    char text[FRAME_LEN + 1];
 } MatchFrame;
 
 /* Simulates one team's goals from attack/defence ratings. */

@@ -18,7 +18,8 @@ cc65 will work without touching the system.
 python tools/build.py all        # everything
 python tools/build.py game       # build/fm2.tap      (the game)
 python tools/build.py selftest   # build/selftest.tap  (on-machine tests)
-python tools/build.py unit       # build/test_core.prg + run under sim65
+python tools/build.py unit       # build/test_core.prg and test_spr.prg, run under sim65
+python tools/build.py hires      # draw the bitmap pages under sim65
 python tools/build.py clean
 ```
 
@@ -44,6 +45,27 @@ To drive the game by hand:
 ```
 python tools/oricutron.py --tape build/fm2.tap \
     --type 'CLOAD"' --keys ENTER --wait 20
+```
+
+## The HIRES pages
+
+The team selection and the match action are bitmap screens.  `hires.s`
+is the whole driver: plot/unplot, whole-byte line fills, a 5x7 text
+blitter and the mode switch through `$BFDF`.  Nothing in C touches the
+screen bytes directly.
+
+```
+python tools/build.py hires                 # build/hires.bin
+python tools/hiresview.py build/hires.bin  # ASCII view of the bitmap
+python tools/hiresview.py build/hires.bin out.png
+```
+
+`tests/test_hires.c` draws a known page under sim65 and dumps the 8000
+bytes, which is how the pixel packing (six pixels per byte, bit 5
+leftmost, bit 6 set) is checked without an emulator.
+
+```
+python tests/hires_shots.py   # refresh the HIRES docs screenshots
 ```
 
 ## Tests
