@@ -1,8 +1,21 @@
-# build output: tapes, maps, screenshots, logs
-build/
+# build output: maps, screenshots, logs, intermediates
+build/*
+# ... but the finished tapes are the thing you load on the Oric, so they
+# stay in the repository and can be run without a cc65 toolchain.
+!build/fm2.tap
+!build/selftest.tap
+
+# compiler and linker objects
+*.o
+*.obj
+*.a
 
 # local cc65 toolchain copy
 tools/bin/
+
+# bundled ZX Spectrum emulator and its ROM images: third-party binaries,
+# and the ROMs are Amstrad's copyright and cannot be redistributed
+tools/fuse/
 tools/asminc/
 tools/cfg/
 tools/html/
@@ -12,6 +25,16 @@ tools/samples/
 tools/target/
 tools/cc65.zip
 .freebuff/
+
+# reference material: the original Spectrum tape and screenshots, which
+# are Addictive Software's and must not be published
+ref/
+
+# scratch captures from the emulator
+shots/
+
+# the unrelated .NET authoring suite living in the same checkout
+Office/
 
 # python
 __pycache__/
